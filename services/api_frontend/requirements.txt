@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+aiokafka
+motor
+aioredis
+pydantic
+boto3
+pyjwt
+botocore

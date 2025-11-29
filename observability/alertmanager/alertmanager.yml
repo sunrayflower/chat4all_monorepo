@@ -1,0 +1,19 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  receiver: 'console'
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 3h
+
+receivers:
+  - name: 'console'
+    webhook_configs:
+      - url: 'http://localhost:5001/'   # Example webhook to a logging service
+
+  - name: 'pagerduty'
+    pagerduty_configs:
+      - service_key: 'REPLACE_ME'
+
+inhibit_rules: []

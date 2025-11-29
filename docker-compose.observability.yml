@@ -1,0 +1,78 @@
+version: "3.8"
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/rules:/etc/prometheus/rules:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --web.enable-lifecycle
+    ports:
+      - "9090:9090"
+    depends_on:
+      - alertmanager
+
+  alertmanager:
+    image: prom/alertmanager:latest
+    volumes:
+      - ./observability/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_INSTALL_PLUGINS=grafana-simple-json-datasource
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+
+  node_exporter:
+    image: prom/node-exporter:latest
+    ports:
+      - "9100:9100"
+    restart: unless-stopped
+
+  redis_exporter:
+    image: oliver006/redis_exporter:latest
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "9121:9121"
+
+  mongo_exporter:
+    image: bitnami/mongodb-exporter:latest
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017
+    ports:
+      - "9216:9216"
+
+  minio_exporter:
+    image: minio/mc:latest
+    # if you prefer, use an alternative MinIO exporter image; this is a placeholder
+    ports:
+      - "9300:9300"
+
+  kafka_jmx_exporter:
+    image: bitnami/jmx-exporter:latest
+    volumes:
+      - ./observability/jmx/kafka_jmx_config.yml:/opt/jmx-exporter/config.yml:ro
+    # This container is used as a sidecar in k8s or can be run separately in compose with network to kafka/redpanda
+    ports:
+      - "9301:9301"
+
+  # (Optional) blackbox exporter for endpoint checks
+  blackbox:
+    image: prom/blackbox-exporter:latest
+    ports:
+      - "9115:9115"
+
+# NOTE:
+# - This compose assumes your infra (redis, mongo, redpanda, minio, api_frontend, worker, adapters) are accessible on the same docker network.
+# - You must add actual service names (redis, mongo, redpanda, minio) in the same compose or configure hostnames accordingly.

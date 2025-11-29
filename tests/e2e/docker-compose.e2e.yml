@@ -1,0 +1,30 @@
+version: "3.8"
+services:
+redpanda:
+image: vectorized/redpanda:latest
+ports: ["9092:9092"]
+
+
+mongo:
+image: mongo:6
+ports: ["27017:27017"]
+
+
+redis:
+image: redis:7
+ports: ["6379:6379"]
+
+
+api:
+build: ../../services/api_frontend
+ports: ["8000:8000"]
+
+
+worker:
+build: ../../services/worker
+depends_on: ["api"]
+
+
+connector_mock:
+build: ../../services/adapters/mock
+ports: ["18000:8000"]

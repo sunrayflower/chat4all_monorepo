@@ -1,0 +1,7 @@
+startDelaySeconds: 0
+jmxUrl: service:jmx:rmi:///jndi/rmi://redpanda:9999/jmxrmi
+ssl: false
+lowercaseOutputName: true
+rules:
+  - pattern: "kafka.server<type=(.+), name=(.+)><>Count"
+    name: "kafka_$1_$2_total"

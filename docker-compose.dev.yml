@@ -1,0 +1,116 @@
+version: "3.8"
+services:
+  redpanda:
+    image: redpandadata/redpanda:latest
+    command: ["redpanda", "start", "--overprovisioned", "--smp=1", "--memory=1G", "--reserve-memory=0M", "--node-id=0"]
+    ports: ["9092:9092","9644:9644"]
+    environment:
+      - REDPANDA_AUTO_CREATE_TOPICS=true
+
+  mongo:
+    image: mongo:6
+    ports: ["27017:27017"]
+
+  minio:
+    image: minio/minio:latest
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports: ["9000:9000"]
+
+  redis:
+    image: redis:7
+    ports: ["6379:6379"]
+
+  api_frontend:
+    build: ./services/api_frontend
+    volumes:
+      - ./services/api_frontend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redpanda
+      - mongo
+      - minio
+      - redis
+    environment:
+      KAFKA_BOOTSTRAP: redpanda:9092
+      MONGO_URI: mongodb://mongo:27017
+      REDIS_URI: redis://redis:6379/0
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+      MINIO_BUCKET: chat4all
+      JWT_SIGNING_KEY: "dev_jwt_signing_key"
+
+  worker:
+    build: ./services/worker
+    volumes:
+      - ./services/worker:/app
+    depends_on:
+      - redpanda
+      - mongo
+      - redis
+      - connector_mock
+    environment:
+      KAFKA_BOOTSTRAP: redpanda:9092
+      MONGO_URI: mongodb://mongo:27017
+      REDIS_URI: redis://redis:6379/0
+      INCOMING_TOPIC: incoming.messages
+      OUTGOING_TOPIC: outgoing.messages
+      DLQ_TOPIC: deadletters
+      WORKER_GROUP_ID: chat4all-router-group
+      MAX_RETRIES: "5"
+      BASE_BACKOFF: "0.5"
+
+  connector_mock:
+    image: python:3.11-slim
+    command: >
+      sh -c "pip install aiohttp && python -u - <<'PY'
+      import asyncio, aiohttp, json
+      from aiohttp import web
+      async def handle_send(request):
+      data = await request.json()
+      # simulate 90% success
+      import random
+      if random.random() < 0.9:
+        return web.json_response({'status':'ok'})
+        else:
+        return web.Response(status=500, text='simulated error')
+        app = web.Application()
+        app.router.add_post('/send', handle_send)
+        web.run_app(app, host='0.0.0.0', port=8000)
+        PY"
+    
+    ports:
+      - "18000:8000"
+
+  connector_whatsapp:
+    build: ./services/adapters/whatsapp_cloud
+    volumes:
+      - ./services/adapters/whatsapp_cloud:/app
+    environment:
+      WHATSAPP_PHONE_ID: "<YOUR_PHONE_ID>"
+      WHATSAPP_TOKEN: "<YOUR_WA_CLOUD_TOKEN>"
+    ports:
+      - "8001:8001"
+
+  connector_telegram:
+    build: ./services/adapters/telegram
+    volumes:
+      - ./services/adapters/telegram:/app
+    environment:
+      TELEGRAM_BOT_TOKEN: "<YOUR_TELEGRAM_BOT_TOKEN>"
+    ports:
+      - "8002:8002"
+
+  connector_instagram:
+    build: ./services/adapters/instagram
+    volumes:
+      - ./services/adapters/instagram:/app
+    environment:
+      INSTAGRAM_IG_USER_ID: "<YOUR_IG_USER_ID>"
+      INSTAGRAM_TOKEN: "<YOUR_IG_TOKEN>"
+    ports:
+      - "8003:8003"

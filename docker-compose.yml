@@ -1,0 +1,50 @@
+services:
+  redpanda:
+    image: redpandadata/redpanda:latest
+    command: ["redpanda", "start", "--overprovisioned", "--smp=1", "--memory=1G", "--reserve-memory=0M", "--node-id=0"]
+    ports:
+      - "9092:9092"
+      - "9644:9644"
+    environment:
+      - REDPANDA_AUTO_CREATE_TOPICS=true
+
+  mongo:
+    image: mongo:6
+    ports:
+      - "27017:27017"
+
+  minio:
+    image: minio/minio:latest
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    ports:
+      - "9000:9000"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  api_frontend:
+    build: ./services/api_frontend
+    volumes: ["./services/api_frontend:/app"]
+    ports:
+      - "8000:8000"
+    depends_on: [redpanda, mongo, minio, redis]
+
+  router_worker:
+    build: ./services/worker
+    volumes: ["./services/worker:/app"]
+    depends_on: [redpanda, mongo, redis]
+
+  uploader:
+    build: ./services/uploader
+    volumes: ["./services/uploader:/app"]
+    depends_on: [minio, mongo]
+
+  connectors:
+    build: ./services/adapters
+    volumes: ["./services/connectors:/app"]
+    depends_on: [redpanda]
